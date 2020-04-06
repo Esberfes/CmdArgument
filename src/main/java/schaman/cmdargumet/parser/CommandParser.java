@@ -7,6 +7,8 @@ import schaman.cmdargumet.exception.ParseCommandException;
 import schaman.cmdargumet.exception.ParseCommandParameterException;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -16,7 +18,7 @@ public class CommandParser<T> {
 
     private T object;
     private String[] args;
-    private ParsedCommand<T> parsedCommand;
+    private CommandParsedResult<T> commandParsedResult;
     private List<Field> fields;
 
     public CommandParser(T object, String[] args) {
@@ -27,12 +29,25 @@ public class CommandParser<T> {
 
     /**
      * No se realiza parseo, solo se obtienen meta datos de las anotaciones para que en caso de error se pueda obtener ayuda
+     *
      * @throws ParseCommandException
      */
     private void init() throws ParseCommandException {
         Class<?> clazz = object.getClass();
+        Class<?> commandClazz = null;
+        if (!clazz.isAnnotationPresent(Command.class)) {
+            Class<?> superClazz = clazz.getSuperclass();
+            while (superClazz != null) {
+                if (superClazz.isAnnotationPresent(Command.class)) {
+                    commandClazz = superClazz;
+                    break;
+                }
+                superClazz = superClazz.getSuperclass();
+            }
+        } else
+            commandClazz = clazz;
 
-        if (!clazz.isAnnotationPresent(Command.class))
+        if (commandClazz == null)
             throw new ParseCommandException("@Command annotation is not present on class");
 
         // Se buscan anotaciones el clase
@@ -48,24 +63,24 @@ public class CommandParser<T> {
             superClazz = superClazz.getSuperclass();
         }
 
-        String prefix = clazz.getAnnotation(Command.class).prefix();
-        String description = clazz.getAnnotation(Command.class).description();
+        String prefix = commandClazz.getAnnotation(Command.class).prefix();
+        String description = commandClazz.getAnnotation(Command.class).description();
 
-        this.parsedCommand = new ParsedCommand<>(object, prefix, description);
+        this.commandParsedResult = new CommandParsedResult<>(object, prefix, description);
 
         for (Field field : fields) {
             field.setAccessible(true);
             String parameterName = field.getAnnotation(Parameter.class).name();
             String parameterHelp = field.getAnnotation(Parameter.class).help();
-            this.parsedCommand.putHelpParameter(parameterName, parameterHelp);
+            this.commandParsedResult.putHelpParameter(parameterName, parameterHelp);
         }
     }
 
     public String getHelp() {
-        return this.parsedCommand.getHelp();
+        return this.commandParsedResult.getHelp();
     }
 
-    public ParsedCommand<T> parse() throws ParseCommandParameterException {
+    public CommandParsedResult<T> parse() throws ParseCommandParameterException {
         for (Field field : fields) {
             String parameterName = field.getAnnotation(Parameter.class).name();
             try {
@@ -78,18 +93,18 @@ public class CommandParser<T> {
                 boolean found = false;
                 for (String rawValue : this.args) {
                     // Si es nombre del parametro
-                    if (rawValue.equalsIgnoreCase(this.parsedCommand.getPrefixParameter() + parameterName)) {
+                    if (rawValue.equalsIgnoreCase(this.commandParsedResult.getPrefixParameter() + parameterName)) {
                         values = new ArrayList<>();
                         found = true;
                         continue;
                     }
                     // Si se encuetra con otro nombre de parametro termina
-                    if (found && rawValue.startsWith(this.parsedCommand.getPrefixParameter()))
+                    if (found && rawValue.startsWith(this.commandParsedResult.getPrefixParameter()))
                         break;
                     // Se añade
                     if (found) {
                         values.add(rawValue);
-                        this.parsedCommand.putRawParameter(parameterName, rawValue);
+                        this.commandParsedResult.putRawParameter(parameterName, rawValue);
                     }
                 }
 
@@ -97,8 +112,13 @@ public class CommandParser<T> {
                     throw new ParseCommandParameterException(parameterName, "is required");
 
                 if (values != null) {
-                    Object parsedValue = parameterParser.parse(StringUtils.join(values, " "), field.getType());
-                    this.parsedCommand.putParsedParameter(parameterName, parsedValue);
+                    Type elementType = null;
+                    if (field.getGenericType() instanceof ParameterizedType) {
+                        elementType = ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
+                    }
+
+                    Object parsedValue = parameterParser.parse(StringUtils.join(values, " "), parameterName, required, field.getType(), elementType);
+                    this.commandParsedResult.putParsedParameter(parameterName, parsedValue);
                     field.set(object, parsedValue);
                 }
 
@@ -109,7 +129,7 @@ public class CommandParser<T> {
             }
         }
 
-        return this.parsedCommand;
+        return this.commandParsedResult;
     }
 
     public T getObject() {
@@ -120,7 +140,7 @@ public class CommandParser<T> {
         return args;
     }
 
-    public ParsedCommand<T> getParsedCommand() {
-        return parsedCommand;
+    public CommandParsedResult<T> getCommandParsedResult() {
+        return commandParsedResult;
     }
 }

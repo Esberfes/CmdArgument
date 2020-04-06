@@ -2,13 +2,14 @@ package schaman.cmdargumet.parser;
 
 import schaman.cmdargumet.exception.ParseCommandParameterException;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ListStringCommaParser implements ParameterParser {
 
     @Override
-    public Object parse(String value, Class clazz) throws ParseCommandParameterException {
+    public Object parse(String value, String parameter, boolean required, Class clazz, Type elementType) throws ParseCommandParameterException {
         try {
             List<String> result = new ArrayList<>();
 
@@ -19,7 +20,7 @@ public class ListStringCommaParser implements ParameterParser {
             return result;
 
         } catch (Throwable e) {
-            throw new ParseCommandParameterException(null, "Unable to parse value. " + e.getMessage());
+            throw new ParseCommandParameterException(parameter, "Unable to parse value. " + e.getMessage());
         }
     }
 }

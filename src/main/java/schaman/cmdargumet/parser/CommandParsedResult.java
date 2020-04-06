@@ -5,7 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ParsedCommand<T> {
+public class CommandParsedResult<T> {
     private T commandObject;
     private String prefixParameter;
     private String description;
@@ -13,7 +13,7 @@ public class ParsedCommand<T> {
     private Map<String, Object> parsedParameters;
     private Map<String, String> helpParameters;
 
-    ParsedCommand(T commandObject, String prefixParameter, String description) {
+    CommandParsedResult(T commandObject, String prefixParameter, String description) {
         this.commandObject = commandObject;
         this.prefixParameter = prefixParameter;
         this.description = description;
